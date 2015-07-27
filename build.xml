@@ -1,0 +1,168 @@
+
+<project name="vosa-tcp-proxy" default="all" basedir=".">
+
+  <!-- Note that these property values can be overridden on the ant command line
+         using -Dproperty=value syntax -->
+
+  <!-- Version numbers -->
+  <property name="bridge.version"     value="0.0.2"/>
+  <property name="tcpproxy.version"    value="0.0.4"/>
+
+  <!-- <property name="property.file.name" value="Version.properties"/>
+  <property name="property.file.dir" value="."/>
+  <property name="property.file" value="${property.file.dir}/${property.file.name}"/> -->
+
+  <!-- IP addresses -->
+  <!--
+  <property name="dc.ip" value="10.30.2.1" />
+  <property name="dr.ip" value="10.30.2.3" />
+  <property name="pp.ip" value="10.30.12.3" /> -->
+
+  <!-- Directory definitions -->
+  <property name="scripts.home" value="scripts"/>
+  <property name="src.dir" value="src"/>
+  <property name="build.dir" value="build"/>
+  <property name="backup.dir" value="backup"/>
+  <property name="proto.dir" value="proto"/>
+  <property name="jars.home" value="lib"/>
+  <property name="conf.home" value="conf"/>
+
+  <property name="dist.dir" value="${build.dir}/dist"/>
+  <property name="javadoc.home" value="${build.dir}/javadoc"/>
+  <property name="classes.dir" value="${build.dir}/classes"/>
+  <property name="package.dir" value="package"/>
+  <property name="release.dir" value="release"/>
+
+  <!-- Module definitions -->
+  <property name="prefix" value="vosa-bridge"/>
+
+  <property name="bridge"    value="${prefix}-${bridge.version}"/>
+  <property name="tcpproxy"   value="${prefix}-tcpproxy-${tcpproxy.version}"/>
+
+  <property name="log4j"     value="log4j-1.2.8"/>
+
+
+  <!-- Collect version information from directory names -->
+<!--
+  <target name="version">
+    <exec executable="/usr/bin/bash" failonerror="true">
+      <arg line="-c 'echo -n app.version= &gt; ${property.file}'"/>
+    </exec>
+    <exec executable="/usr/bin/bash" failonerror="true">
+      <arg line="-c &quot;pwd | awk -F/ '{ print $(NF) }' &gt;&gt; ${property.file}&quot;"/>
+    </exec>
+    <property file="${property.file}"/>
+    <echo message="App version is ${app.version}"/>
+  </target> -->
+
+  <target name="prepare">
+
+    <!-- Make the build directories -->
+    <mkdir dir="${build.dir}"/>
+    <mkdir dir="${dist.dir}"/>
+    <mkdir dir="${classes.dir}"/>
+    <mkdir dir="${package.dir}"/>
+    <mkdir dir="${release.dir}"/>
+
+    <!-- Copy the jars, the property files, the scripts and the README -->
+    <copy todir="${dist.dir}">
+      <fileset file="${jars.home}/${log4j}.jar" />
+    </copy>
+
+<!--
+<copy file="${dist.dir}/app_luna.properties" tofile="${dist.dir}/app_luna_dc.properties">
+      <filterset>
+        <filter token="bridge.ip" value="${dc.ip}"/>
+      </filterset>
+    </copy> -->
+
+    <!--  fix up EOLs for whichever OS we are running on -->
+    <fixcrlf srcdir="${dist.dir}" excludes="*.jar,*.keystore" />
+
+  </target>
+
+  <target name="clean">
+    <delete includeEmptyDirs="true" quiet="true">
+      <fileset dir="${build.dir}"/>
+      <fileset dir="${release.dir}"/>
+      <fileset dir="${package.dir}"/>
+    </delete>
+  </target>
+
+  <target name="bridge-compile" depends="prepare">
+
+    <replace file="${src.dir}/com/siemens/sbs/vimot/bridge/Main.java" token="$VERSION$" value="${bridge.version}"/>
+
+    <javac debug="true" optimize="false" deprecation="true" srcdir="${src.dir}" destdir="${classes.dir}">
+
+      <classpath>
+        <pathelement location="${jars.home}/${log4j}.jar"/>
+      </classpath>
+
+      <!-- Include all java files in the bridge directory itself,
+           together with all files under the util & concurrent subdirectories -->
+      <include name="**/bridge/*"/>
+      <include name="**/bridge/util/**"/>
+      <include name="**/bridge/concurrent/**"/>
+
+    </javac>
+  </target>
+
+  <target name="tcpproxy-compile" depends="bridge-compile">
+
+    <replace dir="${src.dir}/com/siemens/sbs/vimot/bridge/tcpproxy" token="$VERSION$" value="${tcpproxy.version}"/>
+
+    <javac debug="true" optimize="false" deprecation="true" srcdir="${src.dir}" destdir="${classes.dir}">
+
+      <classpath>
+        <pathelement location="${jars.home}/${log4j}.jar"/>
+      </classpath>
+
+      <!-- Include all files under the tcpproxy subdirectory -->
+      <include name="**/bridge/tcpproxy/**"/>
+
+    </javac>
+
+  </target>
+
+  <target name="compile" depends="tcpproxy-compile"/>
+
+  <target name="bridge-jar" depends="bridge-compile">
+    <jar jarfile="${dist.dir}/${bridge}.jar"     basedir="${classes.dir}" >
+      <include name="**/bridge/*" />
+      <include name="**/bridge/concurrent/**"/>
+      <include name="**/bridge/util/**"/>
+    </jar>
+  </target>
+
+  <target name="tcpproxy-jar" depends="tcpproxy-compile">
+    <jar jarfile="${dist.dir}/${tcpproxy}.jar"    basedir="${classes.dir}" includes="**/bridge/tcpproxy/**"/>
+  </target>
+
+  <target name="jars" depends="bridge-jar,tcpproxy-jar"/>
+
+  <target name="scripts" depends="jars">
+
+    <replace dir="${dist.dir}" includes="*.sh" >
+      <replacefilter token="$BRIDGE-JAR$" value="${bridge}.jar"/>
+    </replace>
+
+  </target>
+
+  <target name="all" depends="clean,jars,scripts"/>
+
+  <target name="javadoc" depends="clean,prepare">
+    <javadoc sourcepath="${src.dir}" packagenames="*"
+      destdir="${javadoc.home}"/>
+  </target>
+
+  <target name="dist" depends="clean,jars"></target>
+
+  <target name="backup" depends="clean,prepare">
+    <tar basedir="."
+      includes="*,conf/,src/,scripts/"
+      destfile="${build.dir}/bridge.tgz"
+      compression="gzip"/>
+  </target>
+
+</project>
